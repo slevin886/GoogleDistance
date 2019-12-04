@@ -1,6 +1,12 @@
 """
-Data Classes that store and parse data from Google API calls
+Data Classes that store and parse data from Google API calls.
+
+There are four possible transportation modes for the API: Driving, Walking, Bicycle, Transit.
+Each mode is represented by its own class that inherits from TravelTime. For each class,
+You can see if the api call was successful by checking self.success (bool) and if False, you can see why
+using self.status.
 """
+from datetime import datetime
 
 
 class TravelTime:
@@ -12,6 +18,7 @@ class TravelTime:
     """
     def __init__(self, json_response, **kwargs):
         self.json_response = json_response
+        self.utc_time_created = datetime.utcnow()
         self.success = False
         self.status = 'Not parsed'
         self.origin = ''
@@ -43,7 +50,7 @@ class TravelTime:
             self.status = f'JSON not fully valid, index error: {error}'
 
     def parse_mode_json(self):
-        raise NotImplementedError
+        raise NotImplementedError('parse_mode_json is a mode specific function implemented by child classes')
 
     def __str__(self):
         return f"Origin: {self.origin}, Destination: {self.destination}, Status: {self.status}"
@@ -58,11 +65,15 @@ class Driving(TravelTime):
     """
     def __init__(self, json_response, **kwargs):
         super().__init__(json_response, **kwargs)
+        self.mode = 'driving'
         self.duration_in_traffic = None
         if self.status == 'OK':
             self.parse_mode_json()
 
     def parse_mode_json(self):
+        """
+        Sets the attribute for the Driving specific data 'duration_in_traffic'
+        """
         try:
             elements = self.json_response.get('rows')[0].get('elements')[0]
             self.duration_in_traffic = elements['duration_in_traffic']['value']
@@ -72,3 +83,45 @@ class Driving(TravelTime):
         except IndexError as error:
             self.status = f'JSON not fully valid, index error: {error}'
             self.success = False
+
+
+class Walking(TravelTime):
+    """
+    Data Storage & Parsing when mode = 'walking'
+    """
+    def __init__(self, json_response, **kwargs):
+        super().__init__(json_response, **kwargs)
+        self.mode = 'walking'
+        if self.status == 'OK':
+            self.parse_mode_json()
+
+    def parse_mode_json(self):
+        pass
+
+
+class Bicycling(TravelTime):
+    """
+    Data Storage & Parsing when mode = 'bicycling'
+    """
+    def __init__(self, json_response, **kwargs):
+        super().__init__(json_response, **kwargs)
+        self.mode = 'bicycling'
+        if self.status == 'OK':
+            self.parse_mode_json()
+
+    def parse_mode_json(self):
+        pass
+
+
+class Transit(TravelTime):
+    """
+    Data Storage & Parsing when mode = 'transit'
+    """
+    def __init__(self, json_response, **kwargs):
+        super().__init__(json_response, **kwargs)
+        self.mode = 'transit'
+        if self.status == 'OK':
+            self.parse_mode_json()
+
+    def parse_mode_json(self):
+        pass

@@ -1,26 +1,20 @@
 """
+A class to that uses the Google Distance Matrix API to calculate the
+travel distance, time, and traffic between any locations recognized by GoogleMaps.
+
 Requires active API Key for the Google Distance Matrix API
+
+To learn more about the Google Distance Matrix API or how to get an API key see:
+https://developers.google.com/maps/documentation/distance-matrix/intro
 """
-# https://developers.google.com/maps/documentation/distance-matrix/intro
-# place + between all words in an address in the form of: 24+Sussex+Drive+Ottawa+ON
-# separate addresses with |
-# all options separate with &
-# can also use lat/long which are separated with comma origins=41.43206,-81.38992|-33.86748,151.20699
+
 import asyncio
 import aiohttp
 import requests
-from importlib import import_module
+import google_distance.data_classes as data_classes
 
 
-async def get_async_travel_time(session, url):
-    """
-    Async support function for GoogleDistance's run_async method
-    :param session: API request session
-    :param url: API url
-    :return: API response json
-    """
-    async with session.get(url) as response:
-        return await response.json()
+# TODO: enable use of lat/long which are separated with comma origins=41.43206,-81.38992|-33.86748,151.20699
 
 
 class GoogleDistance:
@@ -36,12 +30,12 @@ class GoogleDistance:
         :param avoid: bias route selection to avoid [tolls, highways, ferries, indoor].
         :param units: default is 'imperial', alternatively, use 'metric'.
         :param traffic_model: options are ['best_guess', 'pessimistic', 'optimistic'. Only works when mode is 'driving'
-                              and a departure_time is used.  #TODO: input class method. Departure_time can only be in the
-                              future or the current time. Determines how historical models
-                              are used to determine likely traffic level.
+                              and a departure_time is used in self.run or self.run_async. Departure_time can only be
+                              in the future or the current time. Determines how historical models are used to determine
+                              likely traffic level.
         """
         if (transit_mode or transit_routing_preference) and mode != 'transit':
-            raise Exception("'mode' must be set to 'transit' to use 'transit_mode' or 'transit_routing_preferences'")
+            raise ValueError("'mode' must be set to 'transit' to use 'transit_mode' or 'transit_routing_preferences'")
         self.api_key = api_key
         self.units = units
         self.language = language
@@ -50,12 +44,16 @@ class GoogleDistance:
         self.transit_routing_preference = transit_routing_preference
         self.avoid = avoid
         self.traffic_model = traffic_model
+        self.valid_attributes = dict()
         self._base_url = "https://maps.googleapis.com/maps/api/distancematrix/json?"
-
 
     @staticmethod
     def prep_location_entry(location):
-        # TODO: see if I need to replace commas
+        """
+        Takes location strings and turns them into API compatible location strings
+        :param location: a location str or list of location strings
+        :return: API compatible location string
+        """
         if isinstance(location, list):
             return '|'.join(['+'.join(loc.replace(',', ' ').split()) for loc in location])
         else:
@@ -63,7 +61,7 @@ class GoogleDistance:
 
     def write_query_string(self, origin, destination, departure_time='now', arrival_time=None, *args, **kwargs):
         """
-        Writes the query string for the API call.
+        Writes the query string for the API call and stores the non-null search parameters in self.valid_attributes.
 
         Origins/destinations/key are required parameters of Google's API.
         :param origin: origin can be a string or a list of strings
@@ -79,15 +77,30 @@ class GoogleDistance:
             raise Exception("Can't set both a departure and arrival time")
         if departure_time:
             options += f"&departure_time={departure_time}"
+            self.valid_attributes['departure_time'] = departure_time
         if arrival_time:
             options += f"&arrival_time={arrival_time}"
+            self.valid_attributes['arrival_time'] = arrival_time
         for attribute in ['language', 'units', 'avoid', 'traffic_model', 'transit_mode', 'transit_routing_preference']:
-            if getattr(self, attribute):
-                options += f"&{attribute}={getattr(self, attribute)}"
+            attribute_value = getattr(self, attribute)
+            if attribute_value:
+                options += f"&{attribute}={attribute_value}"
+                self.valid_attributes[attribute] = attribute_value
         return self._base_url + options
 
     @staticmethod
-    async def _make_async_calls(urls):
+    async def get_async_travel_time(session, url):
+        """
+        Async support function for GoogleDistance's run_async method
+        :param session: API request session
+        :param url: API url
+        :return: API response json
+        """
+        async with session.get(url) as response:
+            return await response.json()
+
+    @staticmethod
+    async def _make_async_calls(urls, get_async_travel_time):
         async with aiohttp.ClientSession() as session:
             data = []
             for url in urls:
@@ -100,15 +113,15 @@ class GoogleDistance:
         Accepts a list of dictionaries where each dictionary contains, at minimum, the keys
         'origin' and 'destination'.
         :param destination_objects:
-        :return:
+        :return: List of TravelTime child class corresponding to self.mode
         """
         url_list = []
         for pair in destination_objects:
             url = self.write_query_string(**pair)
             url_list.append(url)
-        travel_times = asyncio.run(self._make_async_calls(url_list))
-        data_class_ = getattr(import_module('api_responses'), self.mode.title())
-        return [data_class_(time_json) for time_json in travel_times]
+        travel_times = asyncio.run(self._make_async_calls(url_list, self.get_async_travel_time))
+        data_class_ = getattr(data_classes, self.mode.title())
+        return [data_class_(time_json, **self.valid_attributes) for time_json in travel_times]
 
     def run(self, origin, destination, departure_time='now', arrival_time=None):
         """
@@ -120,5 +133,5 @@ class GoogleDistance:
         :return: json of API response data
         """
         url = self.write_query_string(origin, destination, departure_time, arrival_time)
-        data_class_ = getattr(import_module('data_classes'), self.mode.title())
-        return data_class_(requests.get(url).json())
+        data_class_ = getattr(data_classes, self.mode.title())
+        return data_class_(requests.get(url).json(), **self.valid_attributes)
