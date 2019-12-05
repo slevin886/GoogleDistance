@@ -52,6 +52,30 @@ class TravelTime:
     def parse_mode_json(self):
         raise NotImplementedError('parse_mode_json is a mode specific function implemented by child classes')
 
+    @property
+    def feet(self):
+        """
+        Returns travel distance in feet (rounded to two decimal places)
+        :return: travel distance in feet
+        """
+        return round(self.distance * 0.3408, 2)
+
+    @property
+    def miles(self):
+        """
+        Returns travel distance in miles (rounded to two decimal places)
+        :return: travel distance in miles
+        """
+        return round(self.distance * 1609.344, 2)
+
+    @property
+    def meters(self):
+        """
+        Returns travel distance in meters
+        :return: travel distance in meters as float
+        """
+        return self.distance
+
     def __str__(self):
         return f"Origin: {self.origin}, Destination: {self.destination}, Status: {self.status}"
 
@@ -75,14 +99,42 @@ class Driving(TravelTime):
         Sets the attribute for the Driving specific data 'duration_in_traffic'
         """
         try:
-            elements = self.json_response.get('rows')[0].get('elements')[0]
-            self.duration_in_traffic = elements['duration_in_traffic']['value']
+            element = self.json_response.get('rows')[0].get('elements')[0]
+            self.duration_in_traffic = element['duration_in_traffic']['value']
         except KeyError as error:
             self.status = f'JSON not fully valid. Key Error: {error}'
             self.success = False
         except IndexError as error:
             self.status = f'JSON not fully valid, index error: {error}'
             self.success = False
+
+
+class Transit(TravelTime):
+    """
+    Data Storage & Parsing when mode = 'transit'
+    """
+    def __init__(self, json_response, **kwargs):
+        super().__init__(json_response, **kwargs)
+        self.mode = 'transit'
+        self.currency = 'No fare information available'
+        self.cost = 'No fare information available'
+        self.cost_text = 'No fare information available'
+        if self.status == 'OK':
+            self.parse_mode_json()
+
+    def parse_mode_json(self):
+        """
+        Sets fare values for transit mode.
+        Fare information is only infrequently available based on municipality and this will
+        most often result in an exception and maintenance of the default fare values.
+        """
+        try:
+            element = self.json_response.get('rows')[0].get('elements')[0]['fare']
+            self.currency = element['currency']
+            self.cost = element['value']
+            self.cost_text = element['text']
+        except KeyError:
+            pass
 
 
 class Walking(TravelTime):
@@ -106,20 +158,6 @@ class Bicycling(TravelTime):
     def __init__(self, json_response, **kwargs):
         super().__init__(json_response, **kwargs)
         self.mode = 'bicycling'
-        if self.status == 'OK':
-            self.parse_mode_json()
-
-    def parse_mode_json(self):
-        pass
-
-
-class Transit(TravelTime):
-    """
-    Data Storage & Parsing when mode = 'transit'
-    """
-    def __init__(self, json_response, **kwargs):
-        super().__init__(json_response, **kwargs)
-        self.mode = 'transit'
         if self.status == 'OK':
             self.parse_mode_json()
 

@@ -59,7 +59,7 @@ class GoogleDistance:
         else:
             return '+'.join(location.replace(',', ' ').split())
 
-    def write_query_string(self, origin, destination, departure_time='now', arrival_time=None, *args, **kwargs):
+    def write_query_string(self, origin, destination, departure_time='now', arrival_time=None):
         """
         Writes the query string for the API call and stores the non-null search parameters in self.valid_attributes.
 
@@ -74,7 +74,7 @@ class GoogleDistance:
         destination = self.prep_location_entry(destination)
         options = f"origins={origin}&destinations={destination}&mode={self.mode}&key={self.api_key}"
         if departure_time and arrival_time:
-            raise Exception("Can't set both a departure and arrival time")
+            raise ValueError("Can't set both a departure and arrival time")
         if departure_time:
             options += f"&departure_time={departure_time}"
             self.valid_attributes['departure_time'] = departure_time

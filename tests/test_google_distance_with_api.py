@@ -10,9 +10,10 @@ API_KEY = os.getenv('API_KEY')
 
 
 def test_sync_run_basic():
-    print(API_KEY)
-    dist = GoogleDistance(API_KEY)
+    dist = GoogleDistance(API_KEY, units='metric')
     result = dist.run('Boston, MA, USA', 'New York, New York')
     assert isinstance(result, Driving)
     assert result.status == 'OK' and result.success
     assert dist.valid_attributes['departure_time'] == 'now'
+    assert isinstance(result.meters, int) and isinstance(result.feet, float)
+    assert result.feet == round(result.meters * 0.3408, 2)
