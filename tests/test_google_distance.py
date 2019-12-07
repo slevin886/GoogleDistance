@@ -28,3 +28,10 @@ def test_write_query_string():
     assert query_string.split('?')[1] == expected
     with pytest.raises(ValueError):  # can't specify both departure & arrival times
         dist.write_query_string('Boston MA', 'Chicago IL', departure_time='now', arrival_time='now')
+
+
+def test_google_distance_init():
+    with pytest.raises(TypeError):
+        dist = GoogleDistance()
+    with pytest.raises(ValueError):
+        dist = GoogleDistance('an_api_key', mode='walking', transit_mode='bus')
